@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 // Use Node runtime because the native postgres client requires Node APIs
 export const runtime = 'nodejs';
 
-const sql = postgres(process.env.POSTGRES_URL ?? '', { ssl: 'require' });
+const sql = postgres(process.env.DATABASE_URL ?? '', { ssl: 'require' });
 
 async function listInvoices() {
   const data = await sql`
