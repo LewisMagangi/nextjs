@@ -1,5 +1,10 @@
 
 'use server';
+// State type for server action validation
+export type State = {
+	message: string | null;
+	errors: Record<string, string[]>;
+};
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -50,15 +55,32 @@ export async function deleteInvoice(id: string) {
 	revalidatePath('/dashboard/invoices');
 	redirect('/dashboard/invoices');
 }
-export async function createInvoice(formData: FormData) {
-	const { customerId, amount, status } = CreateInvoice.parse({
+export async function createInvoice(
+	prevState: State,
+	formData: FormData
+): Promise<State> {
+	const raw = {
 		customerId: formData.get('customerId'),
 		amount: formData.get('amount'),
 		status: formData.get('status'),
-	});
+	};
+	const result = CreateInvoice.safeParse(raw);
+	if (!result.success) {
+		// Map Zod errors to field errors
+		const errors: Record<string, string[]> = {};
+		for (const issue of result.error.issues) {
+			const key = issue.path[0] as string;
+			if (!errors[key]) errors[key] = [];
+			errors[key].push(issue.message);
+		}
+		return {
+			message: "Please correct the errors below.",
+			errors,
+		};
+	}
+	const { customerId, amount, status } = result.data;
 	const amountInCents = amount * 100;
 	const date = new Date().toISOString().split('T')[0];
-
 	try {
 		await sql`
 			INSERT INTO invoices (customer_id, amount, status, date)
@@ -66,9 +88,11 @@ export async function createInvoice(formData: FormData) {
 		`;
 	} catch (error) {
 		console.error(error);
-		throw new Error('Database Error: Failed to Create Invoice.');
+		return {
+			message: 'Database Error: Failed to Create Invoice.',
+			errors: {},
+		};
 	}
-
 	revalidatePath('/dashboard/invoices');
 	redirect('/dashboard/invoices');
 }
